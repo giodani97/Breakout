@@ -24,9 +24,11 @@
 *.lai
 *.la
 *.a
-*.lib
 
 # Executables
 *.exe
 *.out
 *.app
+/.vs
+/Breakout/x64/Debug
+/x64/Debug
