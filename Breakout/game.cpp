@@ -3,14 +3,20 @@
 #include "resource_manager.h"
 #include <glm/glm.hpp>
 #include "game_level.h"
+#include "ball_object.h"
 
 // Initial size of the player paddle
 const glm::vec2 PLAYER_SIZE(100.0f, 20.0f);
 // Initial velocity of the player paddle
 const float PLAYER_VELOCITY(500.0f);
+// Initial velocity of the ball
+const glm::vec2 INITIAL_BALL_VELOCITY(100.0f, -350.0f);
+// Radius of the ball object
+const float BALL_RADIUS = 12.5f;
 
 GameObject* Player;
 SpriteRenderer *Renderer;
+BallObject* Ball;
 
 Game::Game(unsigned int width, unsigned int height)
     : State(GAME_ACTIVE), Keys(), Width(width), Height(height)
@@ -57,29 +63,40 @@ void Game::Init() {
         this->Height - PLAYER_SIZE.y
     );
     Player = new GameObject(playerPos, PLAYER_SIZE, ResourceManager::GetTexture("paddle"));
+    glm::vec2 ballPos = playerPos + glm::vec2(PLAYER_SIZE.x / 2.0f - BALL_RADIUS,
+        -BALL_RADIUS * 2.0f);
+    Ball = new BallObject(ballPos, BALL_RADIUS, INITIAL_BALL_VELOCITY,
+        ResourceManager::GetTexture("face"));
 };
 
 void Game::ProcessInput(float dt)
 {
-    if (this->State == GAME_ACTIVE)
+    float velocity = PLAYER_VELOCITY * dt;
+    // move playerboard
+    if (this->Keys[GLFW_KEY_A] or this->Keys[GLFW_KEY_LEFT])
     {
-        float velocity = PLAYER_VELOCITY * dt;
-        // move playerboard
-        if (this->Keys[GLFW_KEY_A] or this->Keys[GLFW_KEY_LEFT])
+        if (Player->Position.x >= 0.0f)
         {
-            if (Player->Position.x >= 0.0f)
-                Player->Position.x -= velocity;
-        }
-        if (this->Keys[GLFW_KEY_D] or this->Keys[GLFW_KEY_RIGHT])
-        {
-            if (Player->Position.x <= this->Width - Player->Size.x)
-                Player->Position.x += velocity;
+            Player->Position.x -= velocity;
+            if (Ball->Stuck)
+                Ball->Position.x -= velocity;
         }
     }
+    if (this->Keys[GLFW_KEY_D] or this->Keys[GLFW_KEY_RIGHT])
+    {
+        if (Player->Position.x <= this->Width - Player->Size.x)
+        {
+            Player->Position.x += velocity;
+            if (Ball->Stuck)
+                Ball->Position.x += velocity;
+        }
+    }
+    if (this->Keys[GLFW_KEY_SPACE])
+        Ball->Stuck = false;
 }
 
 void Game::Update(float dt) {
-
+    Ball->Move(dt, this->Width);
 };
 
 void Game::Render() {
@@ -93,5 +110,6 @@ void Game::Render() {
         // draw level
         this->Levels[this->Level].Draw(*Renderer);
         Player->Draw(*Renderer);
+        Ball->Draw(*Renderer);
     }
 };

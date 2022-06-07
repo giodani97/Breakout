@@ -51,6 +51,9 @@
     <ClCompile Include="game_level.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
+    <ClCompile Include="ball_object.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h">
@@ -72,6 +75,9 @@
       <Filter>File di intestazione</Filter>
     </ClInclude>
     <ClInclude Include="game_level.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="ball_object.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
   </ItemGroup>
