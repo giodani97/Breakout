@@ -3,6 +3,7 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <tuple>
 #include "game_level.h"
 
 enum GameState {
@@ -11,6 +12,16 @@ enum GameState {
 	GAME_WIN
 };
 
+enum Direction {
+	UP,
+	RIGHT,
+	DOWN,
+	LEFT
+};
+
+typedef std::tuple<bool, Direction, glm::vec2> Collision;
+
+Direction VectorDirection(glm::vec2 target);
 
 class Game {
 public:
@@ -25,6 +36,9 @@ public:
 	void ProcessInput(float dt);
 	void Update(float dt);
 	void Render();
+	void DoCollisions();
+	void ResetLevel();
+	void ResetPlayer();
 };
 
 #endif
