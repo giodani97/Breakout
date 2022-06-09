@@ -5,6 +5,7 @@
 #include "game_level.h"
 #include "ball_object.h"
 #include "particle_generator.h"
+#include "post_processor.h"
 #include <iostream>
 
 // Initial size of the player paddle
@@ -20,6 +21,9 @@ GameObject* Player;
 SpriteRenderer *Renderer;
 BallObject* Ball;
 ParticleGenerator *Particles;
+PostProcessor *Effects;
+
+float ShakeTime = 0.0f;
 
 Game::Game(unsigned int width, unsigned int height)
     : State(GAME_ACTIVE), Keys(), Width(width), Height(height)
@@ -37,6 +41,7 @@ void Game::Init() {
     // load shaders
     ResourceManager::LoadShader("fragments/sprite.vert", "fragments/sprite.frag", nullptr, "sprite");
     ResourceManager::LoadShader("fragments/particles.vert", "fragments/particles.frag", nullptr, "particle");
+    ResourceManager::LoadShader("fragments/post_processing.vert", "fragments/post_processing.frag", nullptr, "effects");
     // configure shaders
     glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(this->Width),
         static_cast<float>(this->Height), 0.0f, -1.0f, 1.0f);
@@ -59,6 +64,7 @@ void Game::Init() {
             ResourceManager::GetTexture("particle"),
             500
     );
+    Effects = new PostProcessor(ResourceManager::GetShader("effects"), this->Width, this->Height);
     // load levels
     GameLevel one; one.Load("levels/one.lvl", this->Width, this->Height / 2);
     GameLevel two; two.Load("levels/two.lvl", this->Width, this->Height / 2);
@@ -115,11 +121,18 @@ void Game::Update(float dt) {
         this->ResetLevel();
         this->ResetPlayer();
     }
+    if (ShakeTime > 0.0f)
+    {
+        ShakeTime -= dt;
+        if (ShakeTime <= 0.0f)
+            Effects->Shake = false;
+    }
 };
 
 void Game::Render() {
     if (this->State == GAME_ACTIVE)
     {
+        Effects->BeginRender();
         // draw background
         Texture2D sprite = ResourceManager::GetTexture("background");
         Renderer->DrawSprite(sprite,
@@ -130,6 +143,8 @@ void Game::Render() {
         Player->Draw(*Renderer);
         Particles->Draw();
         Ball->Draw(*Renderer);
+        Effects->EndRender();
+        Effects->Render(glfwGetTime());
     }
 };
 
@@ -188,6 +203,10 @@ void Game::DoCollisions() {
                 // destroy block if not solid
                 if (!box.IsSolid)
                     box.Destroyed = true;
+                else {
+                    ShakeTime = 0.05f;
+                    Effects->Shake = true;
+                }
                 // collision resolution
                 Direction dir = std::get<1>(collision);
                 glm::vec2 diff_vector = std::get<2>(collision);
