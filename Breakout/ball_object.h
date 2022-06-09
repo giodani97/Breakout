@@ -8,6 +8,8 @@ public:
     // ball state	
     float     Radius;
     bool      Stuck;
+    bool      Sticky;
+    bool      PassThrough;
 
 
     BallObject();

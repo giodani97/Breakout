@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 #include <tuple>
 #include "game_level.h"
+#include "powerup.h"
 
 enum GameState {
 	GAME_ACTIVE,
@@ -28,6 +29,7 @@ public:
 	GameState State;
 	bool Keys[1024];
 	unsigned int Width, Height;
+    std::vector<PowerUp>  PowerUps;
 	std::vector<GameLevel>  Levels;
 	unsigned int Level;
 	Game(unsigned int width, unsigned int height);
@@ -39,6 +41,8 @@ public:
 	void DoCollisions();
 	void ResetLevel();
 	void ResetPlayer();
+    void SpawnPowerUps(GameObject &block);
+    void UpdatePowerUps(float dt);
 };
 
 #endif
