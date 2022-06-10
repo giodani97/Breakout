@@ -26,6 +26,7 @@ BallObject* Ball;
 ParticleGenerator *Particles;
 PostProcessor *Effects;
 ISoundEngine *SoundEngine = createIrrKlangDevice();
+ISound* sndResult;
 
 float ShakeTime = 0.0f;
 
@@ -97,7 +98,7 @@ void Game::Init() {
         -BALL_RADIUS * 2.0f);
     Ball = new BallObject(ballPos, BALL_RADIUS, INITIAL_BALL_VELOCITY,
         ResourceManager::GetTexture("face"));
-    SoundEngine->play2D("audio/breakout.mp3", true);
+    sndResult = SoundEngine->play2D("audio/breakout.mp3", true, false, true, ESM_AUTO_DETECT, false);
 };
 
 void Game::ProcessInput(float dt)
@@ -241,15 +242,26 @@ void Game::SpawnPowerUps(GameObject &block)
         this->PowerUps.push_back(PowerUp("pad-size-increase", glm::vec3(1.0f, 0.6f, 0.4), 0.0f, block.Position, ResourceManager::GetTexture("powerup_increase")));
     if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("dec_speed", glm::vec3(1.0f, 0.5f, 0.8), 0.0f, block.Position, ResourceManager::GetTexture("powerup_dec_speed")));
-    if (ShouldSpawn(5))
-        this->PowerUps.push_back(PowerUp("slowmo", glm::vec3(0.0f, 0.6f, 1.0), 0.0f, block.Position, ResourceManager::GetTexture("powerup_slowmo")));
+    if (ShouldSpawn(3))
+        this->PowerUps.push_back(PowerUp("slowmo", glm::vec3(0.0f, 0.6f, 1.0), 20.0f, block.Position, ResourceManager::GetTexture("powerup_slowmo")));
     if (ShouldSpawn(15)) // Negative powerups should spawn more often
         this->PowerUps.push_back(PowerUp("confuse", glm::vec3(1.0f, 0.3f, 0.3f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_confuse")));
     if (ShouldSpawn(15))
         this->PowerUps.push_back(PowerUp("chaos", glm::vec3(0.9f, 0.25f, 0.25f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_chaos")));
 }
 
-void ActivatePowerUp(PowerUp &powerUp)
+bool IsOtherPowerUpActive(std::vector<PowerUp>& powerUps, std::string type)
+{
+    for (const PowerUp& powerUp : powerUps)
+    {
+        if (powerUp.Activated)
+            if (powerUp.Type == type)
+                return true;
+    }
+    return false;
+}
+
+void Game::ActivatePowerUp(PowerUp &powerUp)
 {
     if (powerUp.Type == "speed")
     {
@@ -285,22 +297,19 @@ void ActivatePowerUp(PowerUp &powerUp)
     }
     else if (powerUp.Type == "slowmo")
     {
-        Ball->oldVelocity = Ball->Velocity;
-        Ball->Velocity = glm::vec2 (100.0f, -50.0f);
+        if (!IsOtherPowerUpActive(this->PowerUps, "slowmo")) {
+            Ball->oldVelocity = Ball->Velocity;
+            Ball->Velocity.y = INITIAL_BALL_VELOCITY.y * 0.3f;
+            if (Ball->oldVelocity.y / abs(Ball->oldVelocity.y) != (Ball->Velocity.y / abs(Ball->Velocity.y)))
+                Ball->Velocity.y *= -1;
+            Ball->Color = glm::vec3(0.0f, 0.6f, 1.0f);
+            sndResult->setPlaybackSpeed(0.5f);
+        }
     }
 }
 
 
-bool IsOtherPowerUpActive(std::vector<PowerUp> &powerUps, std::string type)
-{
-    for (const PowerUp &powerUp : powerUps)
-    {
-        if (powerUp.Activated)
-            if (powerUp.Type == type)
-                return true;
-    }
-    return false;
-}
+
 
 void Game::UpdatePowerUps(float dt)
 {
@@ -350,7 +359,14 @@ void Game::UpdatePowerUps(float dt)
                 {
                     if (!IsOtherPowerUpActive(this->PowerUps, "slowmo"))
                     {	// only reset if no other PowerUp of type chaos is active
-                        Ball->Velocity = INITIAL_BALL_VELOCITY;
+                        bool isNegative = false;
+                        if (Ball->oldVelocity.y / abs(Ball->oldVelocity.y) != (Ball->Velocity.y / abs(Ball->Velocity.y)))
+                            isNegative = true;
+                        Ball->Velocity.y = Ball->oldVelocity.y;
+                        Ball->Color = glm::vec3(1.0f);
+                        if (isNegative)
+                            Ball->Velocity.y *= -1;
+                        sndResult->setPlaybackSpeed(1.0f);
                     }
                 }
             }

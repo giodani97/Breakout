@@ -43,6 +43,7 @@ public:
 	void ResetPlayer();
     void SpawnPowerUps(GameObject &block);
     void UpdatePowerUps(float dt);
+	void ActivatePowerUp(PowerUp& powerUp);
 };
 
 #endif
