@@ -70,6 +70,8 @@ void Game::Init() {
     ResourceManager::LoadTexture("textures/powerup_passthrough.png", true, "powerup_passthrough");
     ResourceManager::LoadTexture("textures/powerup_speed.png", true, "powerup_speed");
     ResourceManager::LoadTexture("textures/powerup_sticky.png", true, "powerup_sticky");
+    ResourceManager::LoadTexture("textures/powerup_dec_speed.png", true, "powerup_dec_speed");
+    ResourceManager::LoadTexture("textures/powerup_slowmo.png", true, "powerup_slowmo");
     Particles = new ParticleGenerator(
             ResourceManager::GetShader("particle"),
             ResourceManager::GetTexture("particle"),
@@ -237,6 +239,10 @@ void Game::SpawnPowerUps(GameObject &block)
         this->PowerUps.push_back(PowerUp("pass-through", glm::vec3(0.5f, 1.0f, 0.5f), 10.0f, block.Position, ResourceManager::GetTexture("powerup_passthrough")));
     if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("pad-size-increase", glm::vec3(1.0f, 0.6f, 0.4), 0.0f, block.Position, ResourceManager::GetTexture("powerup_increase")));
+    if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("dec_speed", glm::vec3(1.0f, 0.5f, 0.8), 0.0f, block.Position, ResourceManager::GetTexture("powerup_dec_speed")));
+    if (ShouldSpawn(5))
+        this->PowerUps.push_back(PowerUp("slowmo", glm::vec3(0.0f, 0.6f, 1.0), 0.0f, block.Position, ResourceManager::GetTexture("powerup_slowmo")));
     if (ShouldSpawn(15)) // Negative powerups should spawn more often
         this->PowerUps.push_back(PowerUp("confuse", glm::vec3(1.0f, 0.3f, 0.3f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_confuse")));
     if (ShouldSpawn(15))
@@ -272,6 +278,15 @@ void ActivatePowerUp(PowerUp &powerUp)
     {
         if (!Effects->Confuse)
             Effects->Chaos = true;
+    }
+    else if (powerUp.Type == "dec_speed")
+    {
+        Ball->Velocity *= 0.8;
+    }
+    else if (powerUp.Type == "slowmo")
+    {
+        Ball->oldVelocity = Ball->Velocity;
+        Ball->Velocity = glm::vec2 (100.0f, -50.0f);
     }
 }
 
@@ -329,6 +344,13 @@ void Game::UpdatePowerUps(float dt)
                     if (!IsOtherPowerUpActive(this->PowerUps, "chaos"))
                     {	// only reset if no other PowerUp of type chaos is active
                         Effects->Chaos = false;
+                    }
+                }
+                else if (powerUp.Type == "slowmo")
+                {
+                    if (!IsOtherPowerUpActive(this->PowerUps, "slowmo"))
+                    {	// only reset if no other PowerUp of type chaos is active
+                        Ball->Velocity = INITIAL_BALL_VELOCITY;
                     }
                 }
             }
