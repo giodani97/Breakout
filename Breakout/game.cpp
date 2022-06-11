@@ -26,7 +26,9 @@ BallObject* Ball;
 ParticleGenerator *Particles;
 PostProcessor *Effects;
 ISoundEngine *SoundEngine = createIrrKlangDevice();
-ISound* sndResult;
+ISound* backgroundMusic;
+ISound* backgroundMusicRev;
+ISoundEffectControl *bkgMusicFXControl;
 
 float ShakeTime = 0.0f;
 
@@ -73,6 +75,8 @@ void Game::Init() {
     ResourceManager::LoadTexture("textures/powerup_sticky.png", true, "powerup_sticky");
     ResourceManager::LoadTexture("textures/powerup_dec_speed.png", true, "powerup_dec_speed");
     ResourceManager::LoadTexture("textures/powerup_slowmo.png", true, "powerup_slowmo");
+    ResourceManager::LoadTexture("textures/powerup_death.png", true, "powerup_death");
+    ResourceManager::LoadTexture("textures/powerup_ghost.png", true, "powerup_ghost");
     Particles = new ParticleGenerator(
             ResourceManager::GetShader("particle"),
             ResourceManager::GetTexture("particle"),
@@ -98,7 +102,9 @@ void Game::Init() {
         -BALL_RADIUS * 2.0f);
     Ball = new BallObject(ballPos, BALL_RADIUS, INITIAL_BALL_VELOCITY,
         ResourceManager::GetTexture("face"));
-    sndResult = SoundEngine->play2D("audio/breakout.mp3", true, false, true, ESM_AUTO_DETECT, false);
+    backgroundMusic = SoundEngine->play2D("audio/breakout.mp3", true, false, true, ESM_AUTO_DETECT, true);
+    backgroundMusicRev = SoundEngine->play2D("audio/breakout-reverse.mp3", true, true, true, ESM_AUTO_DETECT, false);
+    bkgMusicFXControl = backgroundMusic->getSoundEffectControl();
 };
 
 void Game::ProcessInput(float dt)
@@ -234,20 +240,24 @@ void Game::SpawnPowerUps(GameObject &block)
 {
     if (ShouldSpawn(75)) // 1 in 75 chance
         this->PowerUps.push_back(PowerUp("speed", glm::vec3(0.5f, 0.5f, 1.0f), 0.0f, block.Position, ResourceManager::GetTexture("powerup_speed")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("sticky", glm::vec3(1.0f, 0.5f, 1.0f), 20.0f, block.Position, ResourceManager::GetTexture("powerup_sticky")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("pass-through", glm::vec3(0.5f, 1.0f, 0.5f), 10.0f, block.Position, ResourceManager::GetTexture("powerup_passthrough")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("pad-size-increase", glm::vec3(1.0f, 0.6f, 0.4), 0.0f, block.Position, ResourceManager::GetTexture("powerup_increase")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("dec_speed", glm::vec3(1.0f, 0.5f, 0.8), 0.0f, block.Position, ResourceManager::GetTexture("powerup_dec_speed")));
-    if (ShouldSpawn(3))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("slowmo", glm::vec3(0.0f, 0.6f, 1.0), 20.0f, block.Position, ResourceManager::GetTexture("powerup_slowmo")));
-    if (ShouldSpawn(15)) // Negative powerups should spawn more often
+    else if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("ghost", glm::vec3(0.5f, 0.5f, 0.5), 20.0f, block.Position, ResourceManager::GetTexture("powerup_ghost")));
+    else if (ShouldSpawn(25)) // Negative powerups should spawn more often
         this->PowerUps.push_back(PowerUp("confuse", glm::vec3(1.0f, 0.3f, 0.3f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_confuse")));
-    if (ShouldSpawn(15))
+    else if (ShouldSpawn(25))
         this->PowerUps.push_back(PowerUp("chaos", glm::vec3(0.9f, 0.25f, 0.25f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_chaos")));
+    else if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("death", glm::vec3(1.0f, 0.1f, 0.1f), 0.0f, block.Position, ResourceManager::GetTexture("powerup_death")));
 }
 
 bool IsOtherPowerUpActive(std::vector<PowerUp>& powerUps, std::string type)
@@ -283,17 +293,30 @@ void Game::ActivatePowerUp(PowerUp &powerUp)
     }
     else if (powerUp.Type == "confuse")
     {
-        if (!Effects->Chaos)
+        if (!Effects->Chaos) {
             Effects->Confuse = true; // only activate if chaos wasn't already active
+            backgroundMusic->setIsPaused(true);
+            backgroundMusicRev->setPlayPosition(backgroundMusic->getPlayLength() - backgroundMusic->getPlayPosition());
+            backgroundMusicRev->setIsPaused(false);
+        }
     }
     else if (powerUp.Type == "chaos")
     {
-        if (!Effects->Confuse)
+        if (!Effects->Confuse) {
             Effects->Chaos = true;
+            if (bkgMusicFXControl)
+                bkgMusicFXControl->enableDistortionSoundEffect();
+            else
+                std::cout << "This device or sound does not support sound effects.\n";
+        }
     }
     else if (powerUp.Type == "dec_speed")
     {
         Ball->Velocity *= 0.8;
+    }
+    else if (powerUp.Type == "ghost")
+    {
+        Ball->Ghost = true;
     }
     else if (powerUp.Type == "slowmo")
     {
@@ -303,8 +326,13 @@ void Game::ActivatePowerUp(PowerUp &powerUp)
             if (Ball->oldVelocity.y / abs(Ball->oldVelocity.y) != (Ball->Velocity.y / abs(Ball->Velocity.y)))
                 Ball->Velocity.y *= -1;
             Ball->Color = glm::vec3(0.0f, 0.6f, 1.0f);
-            sndResult->setPlaybackSpeed(0.5f);
+            backgroundMusic->setPlaybackSpeed(0.5f);
         }
+    }
+    else if (powerUp.Type == "death")
+    {
+        this->ResetLevel();
+        this->ResetPlayer();
     }
 }
 
@@ -341,11 +369,21 @@ void Game::UpdatePowerUps(float dt)
                         Ball->Color = glm::vec3(1.0f);
                     }
                 }
+                else if (powerUp.Type == "ghost")
+                {
+                    if (!IsOtherPowerUpActive(this->PowerUps, "ghost"))
+                    {	// only reset if no other PowerUp of type pass-through is active
+                        Ball->Ghost = true;
+                    }
+                }
                 else if (powerUp.Type == "confuse")
                 {
                     if (!IsOtherPowerUpActive(this->PowerUps, "confuse"))
                     {	// only reset if no other PowerUp of type confuse is active
                         Effects->Confuse = false;
+                        backgroundMusicRev->setIsPaused(true);
+                        backgroundMusic->setPlayPosition(backgroundMusicRev->getPlayLength() - backgroundMusicRev->getPlayPosition());
+                        backgroundMusic->setIsPaused(false);
                     }
                 }
                 else if (powerUp.Type == "chaos")
@@ -366,7 +404,7 @@ void Game::UpdatePowerUps(float dt)
                         Ball->Color = glm::vec3(1.0f);
                         if (isNegative)
                             Ball->Velocity.y *= -1;
-                        sndResult->setPlaybackSpeed(1.0f);
+                        backgroundMusic->setPlaybackSpeed(1.0f);
                     }
                 }
             }
@@ -390,7 +428,7 @@ void Game::DoCollisions() {
                     this->SpawnPowerUps(box);
                     SoundEngine->play2D("audio/bleep.mp3");
                 }
-                else {
+                else if(!Ball->Ghost) {
                     ShakeTime = 0.05f;
                     Effects->Shake = true;
                     SoundEngine->play2D("audio/solid.wav");
@@ -398,7 +436,7 @@ void Game::DoCollisions() {
                 // collision resolution
                 Direction dir = std::get<1>(collision);
                 glm::vec2 diff_vector = std::get<2>(collision);
-                if (!(Ball->PassThrough && !box.IsSolid)){
+                if (!(Ball->PassThrough && !box.IsSolid) && !(Ball->Ghost && box.IsSolid )){
                     if (dir == LEFT || dir == RIGHT) // horizontal collision
                     {
                         Ball->Velocity.x = -Ball->Velocity.x; // reverse horizontal velocity
