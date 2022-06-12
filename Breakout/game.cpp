@@ -452,7 +452,7 @@ void Game::UpdatePowerUps(float dt)
                 {
                     if (!IsOtherPowerUpActive(this->PowerUps, "ghost"))
                     {	// only reset if no other PowerUp of type pass-through is active
-                        Ball->Ghost = true;
+                        Ball->Ghost = false;
                     }
                 }
                 else if (powerUp.Type == "confuse")
@@ -470,6 +470,10 @@ void Game::UpdatePowerUps(float dt)
                     if (!IsOtherPowerUpActive(this->PowerUps, "chaos"))
                     {	// only reset if no other PowerUp of type chaos is active
                         Effects->Chaos = false;
+                        if (bkgMusicFXControl)
+                            bkgMusicFXControl->disableDistortionSoundEffect();
+                        else
+                            std::cout << "This device or sound does not support sound effects.\n";
                     }
                 }
                 else if (powerUp.Type == "slowmo")
