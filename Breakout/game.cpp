@@ -6,9 +6,12 @@
 #include "ball_object.h"
 #include "particle_generator.h"
 #include "post_processor.h"
+#include "textRenderer.h"
 #include <iostream>
 #include <algorithm>
 #include <irrKlang/irrKlang.h>
+#include <sstream>
+
 using namespace irrklang;
 
 // Initial size of the player paddle
@@ -26,6 +29,10 @@ BallObject* Ball;
 ParticleGenerator *Particles;
 PostProcessor *Effects;
 ISoundEngine *SoundEngine = createIrrKlangDevice();
+ISound* backgroundMusic;
+ISound* backgroundMusicRev;
+ISoundEffectControl *bkgMusicFXControl;
+TextRenderer *Text;
 
 float ShakeTime = 0.0f;
 
@@ -35,6 +42,7 @@ Game::Game(unsigned int width, unsigned int height)
 {
     std::vector<GameLevel> Levels;
     unsigned int           Level;
+    Lives = 3;
 }
 
 Game::~Game() {
@@ -70,6 +78,10 @@ void Game::Init() {
     ResourceManager::LoadTexture("textures/powerup_passthrough.png", true, "powerup_passthrough");
     ResourceManager::LoadTexture("textures/powerup_speed.png", true, "powerup_speed");
     ResourceManager::LoadTexture("textures/powerup_sticky.png", true, "powerup_sticky");
+    ResourceManager::LoadTexture("textures/powerup_dec_speed.png", true, "powerup_dec_speed");
+    ResourceManager::LoadTexture("textures/powerup_slowmo.png", true, "powerup_slowmo");
+    ResourceManager::LoadTexture("textures/powerup_death.png", true, "powerup_death");
+    ResourceManager::LoadTexture("textures/powerup_ghost.png", true, "powerup_ghost");
     Particles = new ParticleGenerator(
             ResourceManager::GetShader("particle"),
             ResourceManager::GetTexture("particle"),
@@ -95,56 +107,112 @@ void Game::Init() {
         -BALL_RADIUS * 2.0f);
     Ball = new BallObject(ballPos, BALL_RADIUS, INITIAL_BALL_VELOCITY,
         ResourceManager::GetTexture("face"));
-    SoundEngine->play2D("audio/breakout.mp3", true);
+    backgroundMusic = SoundEngine->play2D("audio/breakout.mp3", true, false, true, ESM_AUTO_DETECT, true);
+    backgroundMusicRev = SoundEngine->play2D("audio/breakout-reverse.mp3", true, true, true, ESM_AUTO_DETECT, false);
+    bkgMusicFXControl = backgroundMusic->getSoundEffectControl();
+    Text = new TextRenderer(this->Width, this->Height);
+    Text->Load("fonts/ocraext.ttf", 24);
+    this->State = GAME_MENU;
 };
 
 void Game::ProcessInput(float dt)
 {
-    float velocity = PLAYER_VELOCITY * dt;
-    // move playerboard
-    if (this->Keys[GLFW_KEY_A] or this->Keys[GLFW_KEY_LEFT])
+    if (this->State == GAME_WIN)
     {
-        if (Player->Position.x >= 0.0f)
+        if (this->Keys[GLFW_KEY_ENTER])
         {
-            Player->Position.x -= velocity;
-            if (Ball->Stuck)
-                Ball->Position.x -= velocity;
+            this->KeysProcessed[GLFW_KEY_ENTER] = true;
+            Effects->Chaos = false;
+            this->State = GAME_MENU;
         }
     }
-    if (this->Keys[GLFW_KEY_D] or this->Keys[GLFW_KEY_RIGHT])
-    {
-        if (Player->Position.x <= this->Width - Player->Size.x)
+    if (this->State == GAME_ACTIVE){
+        float velocity = PLAYER_VELOCITY * dt;
+        // move playerboard
+        if (this->Keys[GLFW_KEY_A] or this->Keys[GLFW_KEY_LEFT])
         {
-            Player->Position.x += velocity;
-            if (Ball->Stuck)
-                Ball->Position.x += velocity;
+            if (Player->Position.x >= 0.0f)
+            {
+                Player->Position.x -= velocity;
+                if (Ball->Stuck)
+                    Ball->Position.x -= velocity;
+            }
+        }
+        if (this->Keys[GLFW_KEY_D] or this->Keys[GLFW_KEY_RIGHT])
+        {
+            if (Player->Position.x <= this->Width - Player->Size.x)
+            {
+                Player->Position.x += velocity;
+                if (Ball->Stuck)
+                    Ball->Position.x += velocity;
+            }
+        }
+        if (this->Keys[GLFW_KEY_SPACE])
+            Ball->Stuck = false;
+    }
+
+    if (this->State == GAME_MENU)
+    {
+        if (this->Keys[GLFW_KEY_ENTER] && !this->KeysProcessed[GLFW_KEY_ENTER])
+        {
+            this->State = GAME_ACTIVE;
+            this->KeysProcessed[GLFW_KEY_ENTER] = true;
+        }
+        if (this->Keys[GLFW_KEY_W] && !this->KeysProcessed[GLFW_KEY_W])
+        {
+            this->Level = (this->Level + 1) % 4;
+            this->KeysProcessed[GLFW_KEY_W] = true;
+        }
+        if (this->Keys[GLFW_KEY_S] && !this->KeysProcessed[GLFW_KEY_S])
+        {
+            if (this->Level > 0)
+                --this->Level;
+            else
+                this->Level = 3;
+            this->KeysProcessed[GLFW_KEY_S] = true;
         }
     }
-    if (this->Keys[GLFW_KEY_SPACE])
-        Ball->Stuck = false;
 }
 
 void Game::Update(float dt) {
-    Ball->Move(dt, this->Width);
-    this->DoCollisions();
-    Particles->Update(dt, *Ball, 2, glm::vec2(Ball->Radius / 2.0f));
-    if (Ball->Position.y >= this->Height)
+    if (this->State == GAME_ACTIVE && this->Levels[this->Level].IsCompleted())
     {
         this->ResetLevel();
         this->ResetPlayer();
+        Effects->Chaos = true;
+        this->State = GAME_WIN;
     }
-    UpdatePowerUps(dt);
-    if (ShakeTime > 0.0f)
+    if (this->State == GAME_ACTIVE || this->State == GAME_MENU){
+        Ball->Move(dt, this->Width);
+        this->DoCollisions();
+        Particles->Update(dt, *Ball, 2, glm::vec2(Ball->Radius / 2.0f));
+        if (Ball->Position.y >= this->Height)
+        {
+            --this->Lives;
+            if (this->Lives == 0)
+            {
+                this->ResetLevel();
+                this->State = GAME_MENU;
+            }
+            this->ResetPlayer();
+        }
+        UpdatePowerUps(dt);
+        if (ShakeTime > 0.0f)
+        {
+            ShakeTime -= dt;
+            if (ShakeTime <= 0.0f)
+                Effects->Shake = false;
+        }
+    }
+
+    if (this->State == GAME_MENU)
     {
-        ShakeTime -= dt;
-        if (ShakeTime <= 0.0f)
-            Effects->Shake = false;
+        Text->RenderText("Press ENTER to start", 250.0f, Height / 2, 1.0f);
+        Text->RenderText("Press W or S to select level", 245.0f, Height / 2 + 20.0f, 0.75f);
     }
 };
 
 void Game::Render() {
-    if (this->State == GAME_ACTIVE)
-    {
         Effects->BeginRender();
         // draw background
         Texture2D sprite = ResourceManager::GetTexture("background");
@@ -161,11 +229,31 @@ void Game::Render() {
                 powerUp.Draw(*Renderer);
         Effects->EndRender();
         Effects->Render(glfwGetTime());
-    }
+        std::stringstream ss; ss << this->Lives;
+        Text->RenderText("Lives:" + ss.str(), 5.0f, 5.0f, 1.0f);
+
+
+        if (this->State == GAME_WIN)
+        {
+            Text->RenderText(
+                    "You WON!!!", 320.0, Height / 2 - 20.0, 1.0, glm::vec3(0.0, 1.0, 0.0)
+            );
+            Text->RenderText(
+                    "Press ENTER to retry or ESC to quit", 130.0, Height / 2, 1.0, glm::vec3(1.0, 1.0, 0.0)
+            );
+        }
+
+        if (this->State == GAME_MENU)
+        {
+            Text->RenderText("Press ENTER to start", 250.0f, Height / 2, 1.0f);
+            Text->RenderText("Press W or S to select level", 245.0f, Height / 2 + 20.0f, 0.75f);
+        }
+
 };
 
 
 void Game::ResetLevel() {
+    this->Lives = 3;
     switch (this->Level)
     {
     case 0:
@@ -231,19 +319,38 @@ void Game::SpawnPowerUps(GameObject &block)
 {
     if (ShouldSpawn(75)) // 1 in 75 chance
         this->PowerUps.push_back(PowerUp("speed", glm::vec3(0.5f, 0.5f, 1.0f), 0.0f, block.Position, ResourceManager::GetTexture("powerup_speed")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("sticky", glm::vec3(1.0f, 0.5f, 1.0f), 20.0f, block.Position, ResourceManager::GetTexture("powerup_sticky")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("pass-through", glm::vec3(0.5f, 1.0f, 0.5f), 10.0f, block.Position, ResourceManager::GetTexture("powerup_passthrough")));
-    if (ShouldSpawn(75))
+    else if (ShouldSpawn(75))
         this->PowerUps.push_back(PowerUp("pad-size-increase", glm::vec3(1.0f, 0.6f, 0.4), 0.0f, block.Position, ResourceManager::GetTexture("powerup_increase")));
-    if (ShouldSpawn(15)) // Negative powerups should spawn more often
+    else if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("dec_speed", glm::vec3(1.0f, 0.5f, 0.8), 0.0f, block.Position, ResourceManager::GetTexture("powerup_dec_speed")));
+    else if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("slowmo", glm::vec3(0.0f, 0.6f, 1.0), 20.0f, block.Position, ResourceManager::GetTexture("powerup_slowmo")));
+    else if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("ghost", glm::vec3(0.5f, 0.5f, 0.5), 20.0f, block.Position, ResourceManager::GetTexture("powerup_ghost")));
+    else if (ShouldSpawn(25)) // Negative powerups should spawn more often
         this->PowerUps.push_back(PowerUp("confuse", glm::vec3(1.0f, 0.3f, 0.3f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_confuse")));
-    if (ShouldSpawn(15))
+    else if (ShouldSpawn(25))
         this->PowerUps.push_back(PowerUp("chaos", glm::vec3(0.9f, 0.25f, 0.25f), 15.0f, block.Position, ResourceManager::GetTexture("powerup_chaos")));
+    else if (ShouldSpawn(75))
+        this->PowerUps.push_back(PowerUp("death", glm::vec3(1.0f, 0.1f, 0.1f), 0.0f, block.Position, ResourceManager::GetTexture("powerup_death")));
 }
 
-void ActivatePowerUp(PowerUp &powerUp)
+bool IsOtherPowerUpActive(std::vector<PowerUp>& powerUps, std::string type)
+{
+    for (const PowerUp& powerUp : powerUps)
+    {
+        if (powerUp.Activated)
+            if (powerUp.Type == type)
+                return true;
+    }
+    return false;
+}
+
+void Game::ActivatePowerUp(PowerUp &powerUp)
 {
     if (powerUp.Type == "speed")
     {
@@ -265,27 +372,51 @@ void ActivatePowerUp(PowerUp &powerUp)
     }
     else if (powerUp.Type == "confuse")
     {
-        if (!Effects->Chaos)
+        if (!Effects->Chaos) {
             Effects->Confuse = true; // only activate if chaos wasn't already active
+            backgroundMusic->setIsPaused(true);
+            backgroundMusicRev->setPlayPosition(backgroundMusic->getPlayLength() - backgroundMusic->getPlayPosition());
+            backgroundMusicRev->setIsPaused(false);
+        }
     }
     else if (powerUp.Type == "chaos")
     {
-        if (!Effects->Confuse)
+        if (!Effects->Confuse) {
             Effects->Chaos = true;
+            if (bkgMusicFXControl)
+                bkgMusicFXControl->enableDistortionSoundEffect();
+            else
+                std::cout << "This device or sound does not support sound effects.\n";
+        }
     }
-}
-
-
-bool IsOtherPowerUpActive(std::vector<PowerUp> &powerUps, std::string type)
-{
-    for (const PowerUp &powerUp : powerUps)
+    else if (powerUp.Type == "dec_speed")
     {
-        if (powerUp.Activated)
-            if (powerUp.Type == type)
-                return true;
+        Ball->Velocity *= 0.8;
     }
-    return false;
+    else if (powerUp.Type == "ghost")
+    {
+        Ball->Ghost = true;
+    }
+    else if (powerUp.Type == "slowmo")
+    {
+        if (!IsOtherPowerUpActive(this->PowerUps, "slowmo")) {
+            Ball->oldVelocity = Ball->Velocity;
+            Ball->Velocity.y = INITIAL_BALL_VELOCITY.y * 0.3f;
+            if (Ball->oldVelocity.y / abs(Ball->oldVelocity.y) != (Ball->Velocity.y / abs(Ball->Velocity.y)))
+                Ball->Velocity.y *= -1;
+            Ball->Color = glm::vec3(0.0f, 0.6f, 1.0f);
+            backgroundMusic->setPlaybackSpeed(0.5f);
+        }
+    }
+    else if (powerUp.Type == "death")
+    {
+        this->ResetLevel();
+        this->ResetPlayer();
+    }
 }
+
+
+
 
 void Game::UpdatePowerUps(float dt)
 {
@@ -317,11 +448,21 @@ void Game::UpdatePowerUps(float dt)
                         Ball->Color = glm::vec3(1.0f);
                     }
                 }
+                else if (powerUp.Type == "ghost")
+                {
+                    if (!IsOtherPowerUpActive(this->PowerUps, "ghost"))
+                    {	// only reset if no other PowerUp of type pass-through is active
+                        Ball->Ghost = false;
+                    }
+                }
                 else if (powerUp.Type == "confuse")
                 {
                     if (!IsOtherPowerUpActive(this->PowerUps, "confuse"))
                     {	// only reset if no other PowerUp of type confuse is active
                         Effects->Confuse = false;
+                        backgroundMusicRev->setIsPaused(true);
+                        backgroundMusic->setPlayPosition(backgroundMusicRev->getPlayLength() - backgroundMusicRev->getPlayPosition());
+                        backgroundMusic->setIsPaused(false);
                     }
                 }
                 else if (powerUp.Type == "chaos")
@@ -329,6 +470,24 @@ void Game::UpdatePowerUps(float dt)
                     if (!IsOtherPowerUpActive(this->PowerUps, "chaos"))
                     {	// only reset if no other PowerUp of type chaos is active
                         Effects->Chaos = false;
+                        if (bkgMusicFXControl)
+                            bkgMusicFXControl->disableDistortionSoundEffect();
+                        else
+                            std::cout << "This device or sound does not support sound effects.\n";
+                    }
+                }
+                else if (powerUp.Type == "slowmo")
+                {
+                    if (!IsOtherPowerUpActive(this->PowerUps, "slowmo"))
+                    {	// only reset if no other PowerUp of type chaos is active
+                        bool isNegative = false;
+                        if (Ball->oldVelocity.y / abs(Ball->oldVelocity.y) != (Ball->Velocity.y / abs(Ball->Velocity.y)))
+                            isNegative = true;
+                        Ball->Velocity.y = Ball->oldVelocity.y;
+                        Ball->Color = glm::vec3(1.0f);
+                        if (isNegative)
+                            Ball->Velocity.y *= -1;
+                        backgroundMusic->setPlaybackSpeed(1.0f);
                     }
                 }
             }
@@ -352,7 +511,7 @@ void Game::DoCollisions() {
                     this->SpawnPowerUps(box);
                     SoundEngine->play2D("audio/bleep.mp3");
                 }
-                else {
+                else if(!Ball->Ghost) {
                     ShakeTime = 0.05f;
                     Effects->Shake = true;
                     SoundEngine->play2D("audio/solid.wav");
@@ -360,7 +519,7 @@ void Game::DoCollisions() {
                 // collision resolution
                 Direction dir = std::get<1>(collision);
                 glm::vec2 diff_vector = std::get<2>(collision);
-                if (!(Ball->PassThrough && !box.IsSolid)){
+                if (!(Ball->PassThrough && !box.IsSolid) && !(Ball->Ghost && box.IsSolid )){
                     if (dir == LEFT || dir == RIGHT) // horizontal collision
                     {
                         Ball->Velocity.x = -Ball->Velocity.x; // reverse horizontal velocity

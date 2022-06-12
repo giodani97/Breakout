@@ -10,6 +10,8 @@ public:
     bool      Stuck;
     bool      Sticky;
     bool      PassThrough;
+    bool      Ghost;
+    glm::vec2 oldVelocity;
 
 
     BallObject();
