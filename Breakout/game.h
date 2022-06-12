@@ -32,6 +32,8 @@ public:
     std::vector<PowerUp>  PowerUps;
 	std::vector<GameLevel>  Levels;
 	unsigned int Level;
+    unsigned int Lives;
+    bool KeysProcessed[1024];
 	Game(unsigned int width, unsigned int height);
 	~Game();
 	void Init();

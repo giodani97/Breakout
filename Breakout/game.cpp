@@ -6,9 +6,12 @@
 #include "ball_object.h"
 #include "particle_generator.h"
 #include "post_processor.h"
+#include "textRenderer.h"
 #include <iostream>
 #include <algorithm>
 #include <irrKlang/irrKlang.h>
+#include <sstream>
+
 using namespace irrklang;
 
 // Initial size of the player paddle
@@ -29,6 +32,7 @@ ISoundEngine *SoundEngine = createIrrKlangDevice();
 ISound* backgroundMusic;
 ISound* backgroundMusicRev;
 ISoundEffectControl *bkgMusicFXControl;
+TextRenderer *Text;
 
 float ShakeTime = 0.0f;
 
@@ -38,6 +42,7 @@ Game::Game(unsigned int width, unsigned int height)
 {
     std::vector<GameLevel> Levels;
     unsigned int           Level;
+    Lives = 3;
 }
 
 Game::~Game() {
@@ -105,55 +110,109 @@ void Game::Init() {
     backgroundMusic = SoundEngine->play2D("audio/breakout.mp3", true, false, true, ESM_AUTO_DETECT, true);
     backgroundMusicRev = SoundEngine->play2D("audio/breakout-reverse.mp3", true, true, true, ESM_AUTO_DETECT, false);
     bkgMusicFXControl = backgroundMusic->getSoundEffectControl();
+    Text = new TextRenderer(this->Width, this->Height);
+    Text->Load("fonts/ocraext.ttf", 24);
+    this->State = GAME_MENU;
 };
 
 void Game::ProcessInput(float dt)
 {
-    float velocity = PLAYER_VELOCITY * dt;
-    // move playerboard
-    if (this->Keys[GLFW_KEY_A] or this->Keys[GLFW_KEY_LEFT])
+    if (this->State == GAME_WIN)
     {
-        if (Player->Position.x >= 0.0f)
+        if (this->Keys[GLFW_KEY_ENTER])
         {
-            Player->Position.x -= velocity;
-            if (Ball->Stuck)
-                Ball->Position.x -= velocity;
+            this->KeysProcessed[GLFW_KEY_ENTER] = true;
+            Effects->Chaos = false;
+            this->State = GAME_MENU;
         }
     }
-    if (this->Keys[GLFW_KEY_D] or this->Keys[GLFW_KEY_RIGHT])
-    {
-        if (Player->Position.x <= this->Width - Player->Size.x)
+    if (this->State == GAME_ACTIVE){
+        float velocity = PLAYER_VELOCITY * dt;
+        // move playerboard
+        if (this->Keys[GLFW_KEY_A] or this->Keys[GLFW_KEY_LEFT])
         {
-            Player->Position.x += velocity;
-            if (Ball->Stuck)
-                Ball->Position.x += velocity;
+            if (Player->Position.x >= 0.0f)
+            {
+                Player->Position.x -= velocity;
+                if (Ball->Stuck)
+                    Ball->Position.x -= velocity;
+            }
+        }
+        if (this->Keys[GLFW_KEY_D] or this->Keys[GLFW_KEY_RIGHT])
+        {
+            if (Player->Position.x <= this->Width - Player->Size.x)
+            {
+                Player->Position.x += velocity;
+                if (Ball->Stuck)
+                    Ball->Position.x += velocity;
+            }
+        }
+        if (this->Keys[GLFW_KEY_SPACE])
+            Ball->Stuck = false;
+    }
+
+    if (this->State == GAME_MENU)
+    {
+        if (this->Keys[GLFW_KEY_ENTER] && !this->KeysProcessed[GLFW_KEY_ENTER])
+        {
+            this->State = GAME_ACTIVE;
+            this->KeysProcessed[GLFW_KEY_ENTER] = true;
+        }
+        if (this->Keys[GLFW_KEY_W] && !this->KeysProcessed[GLFW_KEY_W])
+        {
+            this->Level = (this->Level + 1) % 4;
+            this->KeysProcessed[GLFW_KEY_W] = true;
+        }
+        if (this->Keys[GLFW_KEY_S] && !this->KeysProcessed[GLFW_KEY_S])
+        {
+            if (this->Level > 0)
+                --this->Level;
+            else
+                this->Level = 3;
+            this->KeysProcessed[GLFW_KEY_S] = true;
         }
     }
-    if (this->Keys[GLFW_KEY_SPACE])
-        Ball->Stuck = false;
 }
 
 void Game::Update(float dt) {
-    Ball->Move(dt, this->Width);
-    this->DoCollisions();
-    Particles->Update(dt, *Ball, 2, glm::vec2(Ball->Radius / 2.0f));
-    if (Ball->Position.y >= this->Height)
+    if (this->State == GAME_ACTIVE && this->Levels[this->Level].IsCompleted())
     {
         this->ResetLevel();
         this->ResetPlayer();
+        Effects->Chaos = true;
+        this->State = GAME_WIN;
     }
-    UpdatePowerUps(dt);
-    if (ShakeTime > 0.0f)
+    if (this->State == GAME_ACTIVE || this->State == GAME_MENU){
+        Ball->Move(dt, this->Width);
+        this->DoCollisions();
+        Particles->Update(dt, *Ball, 2, glm::vec2(Ball->Radius / 2.0f));
+        if (Ball->Position.y >= this->Height)
+        {
+            --this->Lives;
+            if (this->Lives == 0)
+            {
+                this->ResetLevel();
+                this->State = GAME_MENU;
+            }
+            this->ResetPlayer();
+        }
+        UpdatePowerUps(dt);
+        if (ShakeTime > 0.0f)
+        {
+            ShakeTime -= dt;
+            if (ShakeTime <= 0.0f)
+                Effects->Shake = false;
+        }
+    }
+
+    if (this->State == GAME_MENU)
     {
-        ShakeTime -= dt;
-        if (ShakeTime <= 0.0f)
-            Effects->Shake = false;
+        Text->RenderText("Press ENTER to start", 250.0f, Height / 2, 1.0f);
+        Text->RenderText("Press W or S to select level", 245.0f, Height / 2 + 20.0f, 0.75f);
     }
 };
 
 void Game::Render() {
-    if (this->State == GAME_ACTIVE)
-    {
         Effects->BeginRender();
         // draw background
         Texture2D sprite = ResourceManager::GetTexture("background");
@@ -170,11 +229,31 @@ void Game::Render() {
                 powerUp.Draw(*Renderer);
         Effects->EndRender();
         Effects->Render(glfwGetTime());
-    }
+        std::stringstream ss; ss << this->Lives;
+        Text->RenderText("Lives:" + ss.str(), 5.0f, 5.0f, 1.0f);
+
+
+        if (this->State == GAME_WIN)
+        {
+            Text->RenderText(
+                    "You WON!!!", 320.0, Height / 2 - 20.0, 1.0, glm::vec3(0.0, 1.0, 0.0)
+            );
+            Text->RenderText(
+                    "Press ENTER to retry or ESC to quit", 130.0, Height / 2, 1.0, glm::vec3(1.0, 1.0, 0.0)
+            );
+        }
+
+        if (this->State == GAME_MENU)
+        {
+            Text->RenderText("Press ENTER to start", 250.0f, Height / 2, 1.0f);
+            Text->RenderText("Press W or S to select level", 245.0f, Height / 2 + 20.0f, 0.75f);
+        }
+
 };
 
 
 void Game::ResetLevel() {
+    this->Lives = 3;
     switch (this->Level)
     {
     case 0:
