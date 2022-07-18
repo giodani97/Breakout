@@ -60,6 +60,9 @@
     <ClCompile Include="particle_generator.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
+    <ClCompile Include="textRenderer.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h">
@@ -95,6 +98,9 @@
     <ClInclude Include="particle_generator.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="textRenderer.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="fragments\sprite.frag">
@@ -114,6 +120,24 @@
     </None>
     <None Include="levels\four.lvl">
       <Filter>Levels</Filter>
+    </None>
+    <None Include="fragments\post_processing.frag">
+      <Filter>Fragments</Filter>
+    </None>
+    <None Include="fragments\post_processing.vert">
+      <Filter>Fragments</Filter>
+    </None>
+    <None Include="fragments\text.frag">
+      <Filter>Fragments</Filter>
+    </None>
+    <None Include="fragments\text.vert">
+      <Filter>Fragments</Filter>
+    </None>
+    <None Include="fragments\particles.frag">
+      <Filter>Fragments</Filter>
+    </None>
+    <None Include="fragments\particles.vert">
+      <Filter>Fragments</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

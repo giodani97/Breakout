@@ -85,7 +85,7 @@ void Game::Init() {
     Particles = new ParticleGenerator(
             ResourceManager::GetShader("particle"),
             ResourceManager::GetTexture("particle"),
-            500
+            1000
     );
     Effects = new PostProcessor(ResourceManager::GetShader("effects"), this->Width, this->Height);
     // load levels
@@ -364,7 +364,14 @@ void Game::ActivatePowerUp(PowerUp &powerUp)
     else if (powerUp.Type == "pass-through")
     {
         Ball->PassThrough = true;
-        Ball->Color = glm::vec3(1.0f, 0.5f, 0.5f);
+        if (IsOtherPowerUpActive(this->PowerUps, "slowmo") && IsOtherPowerUpActive(this->PowerUps, "ghost"))
+            Ball->Color = glm::vec3(0.5f, 0.6f, 0.7f);
+        else if (IsOtherPowerUpActive(this->PowerUps, "slowmo"))
+            Ball->Color = glm::vec3(0.5f, 0.5f, 0.7f);
+        else if (IsOtherPowerUpActive(this->PowerUps, "ghost"))
+            Ball->Color = glm::vec3(0.7f, 0.5f, 0.5f);
+        else
+            Ball->Color = glm::vec3(1.0f, 0.5f, 0.5f);
     }
     else if (powerUp.Type == "pad-size-increase")
     {
@@ -396,6 +403,14 @@ void Game::ActivatePowerUp(PowerUp &powerUp)
     else if (powerUp.Type == "ghost")
     {
         Ball->Ghost = true;
+        if (IsOtherPowerUpActive(this->PowerUps, "slowmo") && IsOtherPowerUpActive(this->PowerUps, "pass-through"))
+            Ball->Color = glm::vec3(0.5f, 0.6f, 0.7f);
+        else if (IsOtherPowerUpActive(this->PowerUps, "slowmo"))
+            Ball->Color = glm::vec3(0.2f, 0.6f, 0.7f);
+        else if (IsOtherPowerUpActive(this->PowerUps, "pass-through"))
+            Ball->Color = glm::vec3(0.7f, 0.5f, 0.5f);
+        else
+            Ball->Color = glm::vec3(0.5f, 0.5f, 0.5f);
     }
     else if (powerUp.Type == "slowmo")
     {
@@ -404,13 +419,25 @@ void Game::ActivatePowerUp(PowerUp &powerUp)
             Ball->Velocity.y = INITIAL_BALL_VELOCITY.y * 0.3f;
             if (Ball->oldVelocity.y / abs(Ball->oldVelocity.y) != (Ball->Velocity.y / abs(Ball->Velocity.y)))
                 Ball->Velocity.y *= -1;
-            Ball->Color = glm::vec3(0.0f, 0.6f, 1.0f);
+            if (IsOtherPowerUpActive(this->PowerUps, "ghost") && IsOtherPowerUpActive(this->PowerUps, "pass-through"))
+                Ball->Color = glm::vec3(0.5f, 0.6f, 0.7f);
+            else if (IsOtherPowerUpActive(this->PowerUps, "ghost"))
+                Ball->Color = glm::vec3(0.2f, 0.6f, 0.7f);
+            else if (IsOtherPowerUpActive(this->PowerUps, "pass-through"))
+                Ball->Color = glm::vec3(0.5f, 0.5f, 0.7f);
+            else
+                Ball->Color = glm::vec3(0.0f, 0.6f, 1.0f);
             backgroundMusic->setPlaybackSpeed(0.5f);
         }
     }
     else if (powerUp.Type == "death")
     {
-        this->ResetLevel();
+        --this->Lives;
+        if (this->Lives == 0)
+        {
+            this->ResetLevel();
+            this->State = GAME_MENU;
+        }
         this->ResetPlayer();
     }
 }
