@@ -15,6 +15,8 @@
 *.so
 *.dylib
 *.dll
+!ikpMP3.dll
+!irrKlang.dll
 
 # Fortran module files
 *.mod
