@@ -17,6 +17,7 @@
 *.dll
 !ikpMP3.dll
 !irrKlang.dll
+!freetype.dll
 
 # Fortran module files
 *.mod
